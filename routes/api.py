@@ -183,9 +183,10 @@ def get_live():
         'session_id': session.id,
         'is_connected': is_connected,
         'metrics': {
-            'rpm': session.avg_rpm,
-            'voltage': session.avg_voltage,
-            'current': session.avg_current
+            # Show latest raw values so the dashboard responds immediately
+            'voltage': session.raw_voltage,
+            'current': session.raw_current,
+            'power_w': session.raw_voltage * session.raw_current,
         },
         'totals': {
             'energy_wh': session.avg_voltage * session.avg_current * ((datetime.utcnow() - session.start_time).total_seconds() / 3600.0),

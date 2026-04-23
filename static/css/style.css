@@ -4,6 +4,19 @@ body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+.page-content {
+    animation: pageFadeIn 180ms ease-out;
+}
+
+@keyframes pageFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.navbar .nav-link.active {
+    color: #f0a500 !important;
+}
+
 .card-dark {
     background: #161b22;
     border: 1px solid #30363d;

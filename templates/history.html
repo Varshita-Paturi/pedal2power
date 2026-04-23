@@ -56,7 +56,6 @@
                             <tr class="text-muted small text-uppercase">
                                 <th>Date</th>
                                 <th>Duration</th>
-                                <th>Avg RPM</th>
                                 <th>Avg Voltage</th>
                                 <th>Energy (Wh)</th>
                                 <th>Calories</th>
@@ -67,14 +66,13 @@
                             <tr v-for="session in sessions" :key="session.id">
                                 <td>[[ formatDate(session.start_time) ]]</td>
                                 <td>[[ formatDuration(session.duration_seconds) ]]</td>
-                                <td>[[ session.avg_rpm.toFixed(0) ]]</td>
                                 <td>[[ session.avg_voltage.toFixed(1) ]]V</td>
                                 <td class="text-orange fw-bold">[[ session.energy_wh.toFixed(2) ]]</td>
                                 <td>[[ session.calories_burned.toFixed(1) ]]</td>
                                 <td>[[ session.co2_saved_g.toFixed(1) ]]g</td>
                             </tr>
                             <tr v-if="sessions.length === 0">
-                                <td colspan="7" class="text-center py-4 text-muted">No sessions yet — start pedaling!</td>
+                                <td colspan="6" class="text-center py-4 text-muted">No sessions yet — start pedaling!</td>
                             </tr>
                         </tbody>
                     </table>

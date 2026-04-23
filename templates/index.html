@@ -30,12 +30,6 @@
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card-dark text-center">
-                <div class="metric-label">RPM</div>
-                <div class="metric-value">[[ metrics.rpm.toFixed(0) ]]</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card-dark text-center">
                 <div class="metric-label">Voltage</div>
                 <div class="metric-value">[[ metrics.voltage.toFixed(1) ]]<small class="fs-6">V</small></div>
             </div>
@@ -49,7 +43,13 @@
         <div class="col-md-3">
             <div class="card-dark text-center">
                 <div class="metric-label">Power</div>
-                <div class="metric-value">[[ (metrics.voltage * metrics.current).toFixed(1) ]]<small class="fs-6">W</small></div>
+                <div class="metric-value">[[ metrics.power_w.toFixed(1) ]]<small class="fs-6">W</small></div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-dark text-center">
+                <div class="metric-label">Energy (Session)</div>
+                <div class="metric-value">[[ formatEnergy(totals.energy_wh) ]]</div>
             </div>
         </div>
     </div>
@@ -59,7 +59,7 @@
         <div class="col-lg-8">
             <div class="card-dark h-100">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="mb-0">Live Performance (RPM)</h5>
+                    <h5 class="mb-0">Live Performance (Power)</h5>
                     <div class="form-check form-switch small">
                         <input class="form-check-input" type="checkbox" id="showPrediction" v-model="showPrediction">
                         <label class="form-check-label text-muted" for="showPrediction">Show ML Prediction</label>
@@ -68,8 +68,6 @@
                 <canvas id="liveChart" style="max-height: 300px;"></canvas>
             </div>
         </div>
-    <!-- Session Totals and ML Insights -->
-    <div class="row g-4 mb-4">
         <div class="col-lg-4">
             <div class="card-dark h-100">
                 <h5 class="mb-4">Session Totals</h5>
@@ -91,7 +89,11 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+    </div>
+
+    <!-- ML Insights + Daily Goal -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
             <div class="card-dark h-100">
                 <h5 class="mb-4">ML Insights</h5>
                 <div v-if="mlStats.model_ready">
@@ -122,16 +124,16 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+        <div class="col-lg-6">
             <div class="card-dark h-100">
-                <h5 class="mb-4">Daily Goal (10Wh)</h5>
+                <h5 class="mb-4">Daily Goal (5Wh)</h5>
                 <div class="progress mb-2" style="height: 12px;">
-                    <div class="progress-bar" role="progressbar" :style="{ width: Math.min((todayEnergy / 10) * 100, 100) + '%' }"></div>
+                    <div class="progress-bar" role="progressbar" :style="{ width: Math.min((todayEnergy / 5) * 100, 100) + '%' }"></div>
                 </div>
                 <div class="d-flex justify-content-between small">
                     <span>[[ formatEnergy(todayEnergy) ]] generated</span>
-                    <span v-if="todayEnergy >= 10" class="text-success">Goal Reached!</span>
-                    <span v-else>[[ ((todayEnergy / 10) * 100).toFixed(0) ]]%</span>
+                    <span v-if="todayEnergy >= 5" class="text-success">Goal Reached!</span>
+                    <span v-else>[[ ((todayEnergy / 5) * 100).toFixed(0) ]]%</span>
                 </div>
                 <div class="mt-4 pt-3 border-top">
                     <div class="metric-label mb-1">Current Streak</div>
@@ -154,8 +156,9 @@ createApp({
             sessionId: null,
             isLive: false,
             isConnected: false,
+            userStarted: false,
             showPrediction: false,
-            metrics: { rpm: 0, voltage: 0, current: 0 },
+            metrics: { voltage: 0, current: 0, power_w: 0 },
             mlStats: { model_ready: false, predicted_power: 0 },
             chartHistory: [],
             totals: { energy_wh: 0, duration: 0, calories: 0, co2: 0 },
@@ -166,9 +169,9 @@ createApp({
     },
     computed: {
         motivationalMessage() {
-            if (this.metrics.rpm > 80) return "Incredible! You're a powerhouse!";
-            if (this.metrics.rpm > 50) return "Great pace! Keep it up!";
-            if (this.metrics.rpm > 0) return "Good start! Feel the energy.";
+            if (this.metrics.power_w > 50) return "Incredible! You're a powerhouse!";
+            if (this.metrics.power_w > 20) return "Great pace! Keep it up!";
+            if (this.metrics.power_w > 0) return "Good start! Feel the energy.";
             return "Ready to generate some power?";
         }
     },
@@ -179,9 +182,10 @@ createApp({
                 const data = await res.json();
                 this.sessionId = data.session_id;
                 this.isLive = true;
+                this.userStarted = true;
                 this.chartHistory = [];
                 // Reset metrics
-                this.metrics = { rpm: 0, voltage: 0, current: 0 };
+                this.metrics = { voltage: 0, current: 0, power_w: 0 };
                 this.totals = { energy_wh: 0, duration: 0, calories: 0, co2: 0 };
             } catch (e) { console.error(e); }
         },
@@ -193,6 +197,7 @@ createApp({
                     body: JSON.stringify({ session_id: this.sessionId })
                 });
                 this.isLive = false;
+                this.userStarted = false;
                 this.sessionId = null;
                 this.fetchStats();
             } catch (e) { console.error(e); }
@@ -202,10 +207,11 @@ createApp({
                 const res = await fetch('/api/live');
                 const data = await res.json();
                 
-                if (data.active) {
+                // Do not "auto-start" sessions just because one exists on the server.
+                // Only show live state if the user started in this UI session.
+                if (data.active && this.userStarted && this.sessionId && data.session_id === this.sessionId) {
                     this.isLive = true;
                     this.isConnected = data.is_connected;
-                    this.sessionId = data.session_id;
                     this.metrics = data.metrics;
                     this.totals = {
                         energy_wh: data.totals.energy_wh,
@@ -215,21 +221,22 @@ createApp({
                     };
                     
                     // Fetch ML prediction if toggled
-                    let predictedRPM = null;
+                    let predictedPower = null;
                     if (this.showPrediction && this.mlStats.model_ready) {
-                        const mlRes = await fetch(`/api/ml/predict?rpm=${this.metrics.rpm}&voltage=${this.metrics.voltage}&current=${this.metrics.current}`);
+                        const mlRes = await fetch(`/api/ml/predict?rpm=0&voltage=${this.metrics.voltage}&current=${this.metrics.current}`);
                         const mlData = await mlRes.json();
-                        predictedRPM = mlData.predicted_power_rf; // Using RF for prediction
+                        predictedPower = mlData.predicted_power_rf; // Using RF for prediction
                     }
 
                     // Update chart history
                     const now = new Date().toLocaleTimeString();
-                    this.chartHistory.push({ time: now, rpm: data.metrics.rpm, prediction: predictedRPM });
+                    this.chartHistory.push({ time: now, power: data.metrics.power_w, prediction: predictedPower });
                     if (this.chartHistory.length > 20) this.chartHistory.shift();
                     
                     this.updateChart();
-                } else if (this.isLive) {
+                } else if (this.isLive && this.userStarted && !data.active) {
                     this.isLive = false;
+                    this.userStarted = false;
                     this.sessionId = null;
                 }
             } catch (e) { console.error(e); }
@@ -256,7 +263,7 @@ createApp({
         updateChart() {
             if (!this.chart) return;
             this.chart.data.labels = this.chartHistory.map(h => h.time);
-            this.chart.data.datasets[0].data = this.chartHistory.map(h => h.rpm);
+            this.chart.data.datasets[0].data = this.chartHistory.map(h => h.power);
             
             if (this.showPrediction && this.mlStats.model_ready) {
                 this.chart.data.datasets[1].data = this.chartHistory.map(h => h.prediction);
@@ -275,7 +282,7 @@ createApp({
                     labels: [],
                     datasets: [
                         {
-                            label: 'Actual RPM',
+                            label: 'Actual Power (W)',
                             data: [],
                             borderColor: '#f0a500',
                             backgroundColor: 'rgba(240, 165, 0, 0.1)',
