@@ -62,6 +62,28 @@
     <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/vue.global.prod.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+      // Smooth tab transitions (fade-out before navigation)
+      (() => {
+        const container = document.querySelector('.page-content');
+        if (!container) return;
+
+        const links = document.querySelectorAll('a.nav-link[href]');
+        links.forEach((a) => {
+          a.addEventListener('click', (e) => {
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#')) return;
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            if (a.target && a.target !== '_self') return;
+            // Same-page no-op
+            if (href === window.location.pathname) return;
+            e.preventDefault();
+            container.classList.add('page-fade-out');
+            window.setTimeout(() => { window.location.href = href; }, 110);
+          });
+        });
+      })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

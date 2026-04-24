@@ -25,7 +25,7 @@
         <div class="col-md-3">
             <div class="card-dark text-center">
                 <div class="metric-label">Total Calories</div>
-                <div class="h3 mb-0 fw-bold">[[ (summary.total_calories || 0).toFixed(0) ]]<small class="fs-6">kcal</small></div>
+                <div class="h3 mb-0 fw-bold">[[ (summary.total_calories || 0).toFixed(0) ]]<small class="fs-6">cal</small></div>
             </div>
         </div>
         <div class="col-md-3">
@@ -68,7 +68,7 @@
                                 <td>[[ formatDuration(session.duration_seconds) ]]</td>
                                 <td>[[ session.avg_voltage.toFixed(1) ]]V</td>
                                 <td class="text-orange fw-bold">[[ session.energy_wh.toFixed(2) ]]</td>
-                                <td>[[ session.calories_burned.toFixed(1) ]]</td>
+                                <td>[[ session.calories_burned.toFixed(0) ]]</td>
                                 <td>[[ session.co2_saved_g.toFixed(1) ]]g</td>
                             </tr>
                             <tr v-if="sessions.length === 0">
@@ -93,7 +93,8 @@ createApp({
         return {
             sessions: [],
             summary: {},
-            chart: null
+            chart: null,
+            lastSessionCount: 0
         }
     },
     methods: {
@@ -103,10 +104,20 @@ createApp({
                     fetch('/api/sessions'),
                     fetch('/api/stats/summary')
                 ]);
-                this.sessions = await sessionsRes.json();
+                const newSessions = await sessionsRes.json();
                 this.summary = await summaryRes.json();
                 
-                this.initChart();
+                // Only re-init chart and update sessions if data changed (new session added)
+                if (this.lastSessionCount !== newSessions.length) {
+                    this.sessions = newSessions;
+                    this.lastSessionCount = newSessions.length;
+                    this.initChart();
+                } else {
+                    // Even if session count is the same, active session might have updated energy
+                    // For history page, we just keep sessions synced
+                    // The chart will only redraw on new session completion, but the table can update
+                    this.sessions = newSessions;
+                }
             } catch (e) { console.error(e); }
         },
         initChart() {
@@ -149,6 +160,8 @@ createApp({
     },
     mounted() {
         this.fetchData();
+        // Poll for updates every 5 seconds so History page reflects newly ended sessions immediately
+        setInterval(() => this.fetchData(), 5000);
     }
 }).mount('#app');
 </script>

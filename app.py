@@ -39,6 +39,25 @@ def run_migrations(app):
                 conn.execute(sa.text('ALTER TABLE pedal_session ADD COLUMN power_w FLOAT DEFAULT 0.0'))
             conn.commit()
 
+def close_dangling_sessions(app):
+    """Close any active sessions that were left open due to a server crash or restart."""
+    from models.models import PedalSession
+    from datetime import datetime
+    with app.app_context():
+        dangling_sessions = PedalSession.query.filter_by(end_time=None).all()
+        for session in dangling_sessions:
+            session.end_time = datetime.utcnow()
+            # Calculate duration and stats if needed, or just close them
+            if session.start_time:
+                duration = (session.end_time - session.start_time).total_seconds()
+                session.duration_seconds = int(duration)
+                session.energy_wh = (session.avg_voltage or 0) * (session.avg_current or 0) * (session.duration_seconds / 3600.0)
+                session.calories_burned = session.energy_wh * 860.421
+                session.co2_saved_g = session.energy_wh * 400
+        if dangling_sessions:
+            db.session.commit()
+            print(f"Closed {len(dangling_sessions)} dangling session(s).")
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -67,6 +86,8 @@ def create_app():
     # Create database tables
     with app.app_context():
         db.create_all()
+        
+    close_dangling_sessions(app)
 
     # Optional: start ESP32 serial bridge (set ESP32_SERIAL_PORT=COMx)
     # Flask debug reloader can spawn multiple processes; start bridge:

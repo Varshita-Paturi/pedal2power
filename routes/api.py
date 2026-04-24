@@ -10,6 +10,10 @@ api = Blueprint('api', __name__)
 # Initialize ML Predictor
 predictor = EnergyPredictor()
 
+# Unit conversion: electrical energy (Wh) -> Calories (cal)
+# 1 Wh = 3600 J, 1 cal = 4.184 J => 1 Wh = 860.421 cal
+WH_TO_CAL = 860.421
+
 # Moving Average buffer
 ma_buffer = {}
 
@@ -109,8 +113,8 @@ def end_session():
     
     # energy_wh = avg_voltage * avg_current * (duration_seconds / 3600)
     session.energy_wh = session.avg_voltage * session.avg_current * (session.duration_seconds / 3600.0)
-    # calories_burned = duration_seconds * 0.1
-    session.calories_burned = session.duration_seconds * 0.1
+    # Calories burned estimate derived from generated electrical energy
+    session.calories_burned = session.energy_wh * WH_TO_CAL
     # co2_saved_g = energy_wh * 400
     session.co2_saved_g = session.energy_wh * 400
     
@@ -177,7 +181,11 @@ def get_live():
     if session.last_updated:
         is_connected = (datetime.utcnow() - session.last_updated).total_seconds() < 10
     
-    # Calculate current metrics (most recent average)
+    # Live totals are derived from current average power over elapsed time.
+    elapsed_s = max(0.0, (datetime.utcnow() - session.start_time).total_seconds()) if session.start_time else 0.0
+    avg_power_w = max(0.0, (session.avg_voltage or 0.0) * (session.avg_current or 0.0))
+    energy_wh = avg_power_w * (elapsed_s / 3600.0)
+
     return jsonify({
         'active': True,
         'session_id': session.id,
@@ -189,9 +197,9 @@ def get_live():
             'power_w': session.raw_voltage * session.raw_current,
         },
         'totals': {
-            'energy_wh': session.avg_voltage * session.avg_current * ((datetime.utcnow() - session.start_time).total_seconds() / 3600.0),
-            'duration': int((datetime.utcnow() - session.start_time).total_seconds()),
-            'calories': (datetime.utcnow() - session.start_time).total_seconds() * 0.1
+            'energy_wh': energy_wh,
+            'duration': int(elapsed_s),
+            'calories': energy_wh * WH_TO_CAL,
         }
     })
 

@@ -13,6 +13,12 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+.page-content.page-fade-out {
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 120ms ease-in, transform 120ms ease-in;
+}
+
 .navbar .nav-link.active {
     color: #f0a500 !important;
 }
