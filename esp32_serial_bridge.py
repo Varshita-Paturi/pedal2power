@@ -8,8 +8,16 @@ from datetime import datetime
 from models.models import db, PedalSession, SessionData
 
 
+# Support two formats:
+# 1. "Voltage: X V | Current: Y A" (original format)
+# 2. "V=X V I=Y A" (ESP32 simple format)
 _LINE_RE = re.compile(
-    r"(?:RPM:\s*(?P<rpm>-?\d+(?:\.\d+)?)\s*\|\s*)?Voltage:\s*(?P<voltage>-?\d+(?:\.\d+)?)\s*V\s*\|\s*Current:\s*(?P<current>-?\d+(?:\.\d+)?)\s*A",
+    r"(?:RPM:\s*(?P<rpm>-?\d+(?:\.\d+)?)\s*\|\s*)?"
+    r"(?:"
+    r"Voltage:\s*(?P<voltage>-?\d+(?:\.\d+)?)\s*V\s*\|\s*Current:\s*(?P<current>-?\d+(?:\.\d+)?)\s*A"
+    r"|"
+    r"V=\s*(?P<voltage2>-?\d+(?:\.\d+)?)\s*V\s*I=\s*(?P<current2>-?\d+(?:\.\d+)?)\s*A"
+    r")",
     re.IGNORECASE,
 )
 
@@ -210,8 +218,11 @@ def start_esp32_serial_bridge(app) -> None:
                                 continue
 
                             try:
-                                voltage = float(m.group("voltage"))
-                                current = float(m.group("current"))
+                                # Handle both format groups
+                                voltage_str = m.group("voltage") or m.group("voltage2")
+                                current_str = m.group("current") or m.group("current2")
+                                voltage = float(voltage_str)
+                                current = float(current_str)
                                 rpm_str = m.group("rpm")
                                 if rpm_str is not None:
                                     rpm = float(rpm_str)
